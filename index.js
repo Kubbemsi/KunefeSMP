@@ -71,6 +71,24 @@ client.on('ready', () => {
 // ================= KOMUTLAR =================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+    // YENİ EKLENEN KOD:
+    const icerik = message.content.toLowerCase().trim();
+
+    if (icerik === 'sa' || icerik === 'sa.') {
+        return message.reply('as');
+    }
+    
+    if (icerik === 'selamunaleykum' || icerik === 'selamünaleyküm' || icerik === 'saleykum' || icerik === 's.a.') {
+        return message.reply('aleykumselam');
+    }
+
+    if (icerik === 'sa chat' || icerik === 'sa chat.') {
+        return message.reply('as babomen');
+    }
+
+    if (icerik === 'sa çet' || icerik === 'sa çet.') {
+        return message.reply('as');
+    }
 
     // --- !sunucu ve !ip KOMUTU ---
     if (message.content === '!sunucu' || message.content === '!ip') {
