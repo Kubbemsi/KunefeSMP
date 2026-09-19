@@ -33,6 +33,10 @@ const AYARLAR = {
     SUNUCU_IP: "oyna.kunefesmp.com.tr" // Takip edilecek Minecraft IP'si
 };
 
+// Öneri oylarını hafızada tutmak için kullanılan obje
+// Örnek yapı: { messageId: { evet: ['userId1', 'userId2'], hayir: ['userId3'] } }
+const oneriOylari = {};
+
 // ================= CANLI DURUM GÜNCELLEME =================
 async function sunucuDurumGuncelle() {
     try {
@@ -99,7 +103,10 @@ client.on('messageCreate', async (message) => {
         );
 
         await message.delete().catch(() => {});
-        await message.channel.send({ embeds: [oneriEmbed], components: [oyButonlari] });
+        const gonderilenMesaj = await message.channel.send({ embeds: [oneriEmbed], components: [oyButonlari] });
+
+        // Mesajın oy havuzunu başlatıyoruz
+        oneriOylari[gonderilenMesaj.id] = { evet: [], hayir: [] };
         return;
     }
 
@@ -278,22 +285,43 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 
-    // --- ÖNERİ OYLAMA İŞLEMİ ---
+    // --- TEK OYLU GÜVENLİ ÖNERİ OYLAMA İŞLEMİ ---
     if (interaction.customId === 'oneri_evet' || interaction.customId === 'oneri_hayir') {
         try {
+            const msgId = interaction.message.id;
+            const userId = interaction.user.id;
+
+            // Eğer mesaj hafızada yoksa başlat
+            if (!oneriOylari[msgId]) {
+                oneriOylari[msgId] = { evet: [], hayir: [] };
+            }
+
+            const oyVerileri = oneriOylari[msgId];
+
+            if (interaction.customId === 'oneri_evet') {
+                // Zaten Evet oyu verdiyse uyar
+                if (oyVerileri.evet.includes(userId)) {
+                    return interaction.reply({ content: '❌ Zaten "Evet" oyu kullanmışsınız!', ephemeral: true });
+                }
+                // Hayır listesinden çıkar, Evet listesine ekle
+                oyVerileri.hayir = oyVerileri.hayir.filter(id => id !== userId);
+                oyVerileri.evet.push(userId);
+            } else if (interaction.customId === 'oneri_hayir') {
+                // Zaten Hayır oyu verdiyse uyar
+                if (oyVerileri.hayir.includes(userId)) {
+                    return interaction.reply({ content: '❌ Zaten "Hayır" oyu kullanmışsınız!', ephemeral: true });
+                }
+                // Evet listesinden çıkar, Hayır listesine ekle
+                oyVerileri.evet = oyVerileri.evet.filter(id => id !== userId);
+                oyVerileri.hayir.push(userId);
+            }
+
             const row = interaction.message.components[0];
-            
             let evetButon = ButtonBuilder.from(row.components[0]);
             let hayirButon = ButtonBuilder.from(row.components[1]);
 
-            let evetSayisi = parseInt(evetButon.data.label.replace(/\D/g, '')) || 0;
-            let hayirSayisi = parseInt(hayirButon.data.label.replace(/\D/g, '')) || 0;
-
-            if (interaction.customId === 'oneri_evet') evetSayisi++;
-            if (interaction.customId === 'oneri_hayir') hayirSayisi++;
-
-            evetButon.setLabel(`Evet (${evetSayisi})`);
-            hayirButon.setLabel(`Hayır (${hayirSayisi})`);
+            evetButon.setLabel(`Evet (${oyVerileri.evet.length})`);
+            hayirButon.setLabel(`Hayır (${oyVerileri.hayir.length})`);
 
             const yeniRow = new ActionRowBuilder().addComponents(evetButon, hayirButon);
 
