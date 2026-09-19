@@ -229,4 +229,4 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // Botu Başlat
-client.login(AYARLAR.TOKEN);
+client.login(process.env.TOKEN);
