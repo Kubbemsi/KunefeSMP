@@ -83,19 +83,30 @@ client.on('messageCreate', async (message) => {
             .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
             .setFooter({ text: 'KünefeSMP • Öneri Sistemi' })
             .setTimestamp();
+// BURAYA YAPIŞTIRACAKSIN:
+    if (interaction.customId === 'oneri_evet' || interaction.customId === 'oneri_hayir') {
+        try {
+            const row = interaction.message.components[0];
+            
+            let evetButon = ButtonBuilder.from(row.components[0]);
+            let hayirButon = ButtonBuilder.from(row.components[1]);
 
-        const oyButonlari = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('oneri_evet')
-                .setLabel('Evet (0)')
-                .setEmoji('👍')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('oneri_hayir')
-                .setLabel('Hayır (0)')
-                .setEmoji('👎')
-                .setStyle(ButtonStyle.Danger)
-        );
+            let evetSayisi = parseInt(evetButon.data.label.replace(/\D/g, '')) || 0;
+            let hayirSayisi = parseInt(hayirButon.data.label.replace(/\D/g, '')) || 0;
+
+            if (interaction.customId === 'oneri_evet') evetSayisi++;
+            if (interaction.customId === 'oneri_hayir') hayirSayisi++;
+
+            evetButon.setLabel(`Evet (${evetSayisi})`);
+            hayirButon.setLabel(`Hayır (${hayirSayisi})`);
+
+            const yeniRow = new ActionRowBuilder().addComponents(evetButon, hayirButon);
+
+            await interaction.update({ components: [yeniRow] });
+        } catch (err) {
+            console.error('Oylama hatası:', err);
+        }
+    }
 
         await message.delete().catch(() => {});
         await message.channel.send({ embeds: [oneriEmbed], components: [oyButonlari] });
