@@ -1,9 +1,9 @@
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 app.get('/', (req, res) => res.send('Bot aktif!'));
-app.listen(port, () => console.log(`Web sunucusu ${port} portunda dinleniyor.`));
+app.listen(port, () => console.log(`Port dinleniyor: ${port}`));
 const {     
     Client, 
     GatewayIntentBits, 
