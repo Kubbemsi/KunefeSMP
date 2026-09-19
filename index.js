@@ -35,14 +35,13 @@ const AYARLAR = {
 };
 
 // --- FİLTRE LİSTELERİ VE KONTROLLERİ ---
-// İstediğin küfür/yasaklı kelimeleri buraya küçük harfle ekleyebilirsin:
 const KUFUR_LISTESI = [
     'amk', 'aq', 'oç', 'oc', 'piç', 'pic', 'sik', 'sikerim', 
     'yarrak', 'orospu', 'ibne', 'yavşak', 'puşt', 'döl'
 ];
 
-// Reklam ve Link Kontrolü (Discord davet linkleri ve genel siteler)
-const REKLAM_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li|com\/invite)|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/gi;
+// Reklam ve Link Kontrolü (.com, .net, .org, .com.tr vb. tüm domainleri kesin olarak yakalar)
+const REKLAM_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li|com\/invite)|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)/i;
 
 // Öneri oylarını hafızada tutmak için kullanılan obje
 const oneriOylari = {};
@@ -87,15 +86,16 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
     // --- KÜFÜR VE REKLAM FİLTRESİ ---
-    // Yöneticiler ve yetkili rolündekiler filtreye takılmaz
     const isYetkili = message.member?.permissions.has(PermissionsBitField.Flags.Administrator) ||
                       (AYARLAR.YETKILI_ROL_ID && message.member?.roles.cache.has(AYARLAR.YETKILI_ROL_ID));
 
     if (!isYetkili) {
         const icerikKucuk = message.content.toLowerCase();
 
-        // 1. Reklam Kontrolü
-        if (REKLAM_REGEX.test(message.content)) {
+        // 1. Reklam Kontrolü (Kendi sunucu IP'miz hariç tutulur)
+        const kendiIpSiMi = icerikKucuk.includes(AYARLAR.SUNUCU_IP.toLowerCase());
+        
+        if (!kendiIpSiMi && REKLAM_REGEX.test(message.content)) {
             await message.delete().catch(() => {});
             const uyari = await message.channel.send(`⚠️ ${message.author}, sunucuda reklam yapmak veya dış bağlantı/link paylaşmak yasaktır!`);
             setTimeout(() => uyari.delete().catch(() => {}), 4000);
@@ -118,7 +118,6 @@ client.on('messageCreate', async (message) => {
 
     // --- ÖNERİ SİSTEMİ ---
     if (message.content.startsWith('!öneri ') || message.content.startsWith('!oneri ')) {
-        // Kanal kontrolü
         if (AYARLAR.ONERI_KANAL_ID && message.channel.id !== AYARLAR.ONERI_KANAL_ID) {
             await message.delete().catch(() => {});
             const uyari = await message.channel.send(`❌ Öneri komutunu yalnızca <#${AYARLAR.ONERI_KANAL_ID}> kanalında kullanabilirsin!`);
@@ -153,7 +152,6 @@ client.on('messageCreate', async (message) => {
         await message.delete().catch(() => {});
         const gonderilenMesaj = await message.channel.send({ embeds: [oneriEmbed], components: [oyButonlari] });
 
-        // Mesajın oy havuzunu başlatıyoruz
         oneriOylari[gonderilenMesaj.id] = { evet: [], hayir: [] };
         return;
     }
