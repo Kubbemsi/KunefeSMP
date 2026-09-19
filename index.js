@@ -4,6 +4,7 @@ const port = process.env.PORT || 10000;
 
 app.get('/', (req, res) => res.send('Bot aktif!'));
 app.listen(port, () => console.log(`Port dinleniyor: ${port}`));
+
 const {     
     Client, 
     GatewayIntentBits, 
@@ -52,7 +53,7 @@ async function sunucuDurumGuncelle() {
                     name: `🔴 Sunucu Kapalı | ${AYARLAR.SUNUCU_IP}`, 
                     type: ActivityType.Custom 
                 }],
-                status: 'dnd' // Kırmızı rahatsız etmeyin ikonu
+                status: 'dnd'
             });
         }
     } catch (err) {
@@ -63,7 +64,6 @@ async function sunucuDurumGuncelle() {
 client.on('ready', () => {
     console.log(`[+] Bot başarıyla aktif edildi: ${client.user.tag}`);
     
-    // Bot açılır açılmaz ve her 30 saniyede bir durumu güncelle
     sunucuDurumGuncelle();
     setInterval(sunucuDurumGuncelle, 30000);
 });
@@ -71,6 +71,7 @@ client.on('ready', () => {
 // ================= KOMUTLAR =================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+
     // --- ÖNERİ SİSTEMİ ---
     if (message.content.startsWith('!öneri ') || message.content.startsWith('!oneri ')) {
         const oneriMetni = message.content.slice(7).trim();
@@ -79,7 +80,7 @@ client.on('messageCreate', async (message) => {
         const oneriEmbed = new EmbedBuilder()
             .setTitle('💡 Yeni Sunucu Önerisi')
             .setDescription(oneriMetni)
-            .setColor(0xF1C40F) // Sarı renk
+            .setColor(0xF1C40F)
             .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
             .setFooter({ text: 'KünefeSMP • Öneri Sistemi' })
             .setTimestamp();
@@ -101,7 +102,8 @@ client.on('messageCreate', async (message) => {
         await message.channel.send({ embeds: [oneriEmbed], components: [oyButonlari] });
         return;
     }
-    // YENİ EKLENEN KOD:
+
+    // --- OTOMATİK SELAM KARŞILAMA ---
     const icerik = message.content.toLowerCase().trim();
 
     if (icerik === 'sa' || icerik === 'sa.') {
@@ -132,7 +134,7 @@ client.on('messageCreate', async (message) => {
                 const embed = new EmbedBuilder()
                     .setTitle('🟢 KünefeSMP Çevrimiçi!')
                     .setDescription('Sunucumuz şu an aktif ve oyunculara açık. Hemen katıl!')
-                    .setColor(0x2ECC71) // Yeşil
+                    .setColor(0x2ECC71)
                     .addFields(
                         { name: '📡 Sunucu Adresi', value: `\`${AYARLAR.SUNUCU_IP}\``, inline: true },
                         { name: '👥 Aktif Oyuncular', value: `**${data.players.online}** / **${data.players.max}**`, inline: true },
@@ -146,7 +148,7 @@ client.on('messageCreate', async (message) => {
                 const kapaliEmbed = new EmbedBuilder()
                     .setTitle('🔴 KünefeSMP Şu Anda Kapalı / Bakımda')
                     .setDescription(`Sunucumuza şu anda ulaşılamıyor. Bakım veya güncelleme yapılıyor olabilir.\n\n📡 **IP:** \`${AYARLAR.SUNUCU_IP}\``)
-                    .setColor(0xE74C3C) // Kırmızı
+                    .setColor(0xE74C3C)
                     .setFooter({ text: 'Gelişmeler için duyuruları takip edin.' })
                     .setTimestamp();
 
@@ -195,6 +197,7 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
+    // --- DESTEK SİSTEMİ BUTONLARI ---
     if (interaction.customId === 'bilet_olustur') {
         const kanalAdi = `talep-${interaction.user.username.toLowerCase()}`;
         const mevcutKanal = interaction.guild.channels.cache.find(c => c.name === kanalAdi);
@@ -272,6 +275,31 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.channel.delete();
         } catch (err) {
             console.error('Kanal silinirken hata:', err);
+        }
+    }
+
+    // --- ÖNERİ OYLAMA İŞLEMİ ---
+    if (interaction.customId === 'oneri_evet' || interaction.customId === 'oneri_hayir') {
+        try {
+            const row = interaction.message.components[0];
+            
+            let evetButon = ButtonBuilder.from(row.components[0]);
+            let hayirButon = ButtonBuilder.from(row.components[1]);
+
+            let evetSayisi = parseInt(evetButon.data.label.replace(/\D/g, '')) || 0;
+            let hayirSayisi = parseInt(hayirButon.data.label.replace(/\D/g, '')) || 0;
+
+            if (interaction.customId === 'oneri_evet') evetSayisi++;
+            if (interaction.customId === 'oneri_hayir') hayirSayisi++;
+
+            evetButon.setLabel(`Evet (${evetSayisi})`);
+            hayirButon.setLabel(`Hayır (${hayirSayisi})`);
+
+            const yeniRow = new ActionRowBuilder().addComponents(evetButon, hayirButon);
+
+            await interaction.update({ components: [yeniRow] });
+        } catch (err) {
+            console.error('Oylama hatası:', err);
         }
     }
 });
