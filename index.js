@@ -21,7 +21,8 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers // Yeni üyeleri algılamak için eklendi!
     ]
 });
 
@@ -31,6 +32,7 @@ const AYARLAR = {
     YETKILI_ROL_ID: "1539629513753755760", // Yetkili Rolünün ID'si
     KATEGORI_ID: "1547551650464530462", // Biletlerin açılacağı kategori ID'si
     ONERI_KANAL_ID: "1550824276305776660", // Önerilerin atılacağı kanal ID'si
+    KARSILAMA_KANAL_ID: "1547561101745459320", // <--- Karşılama kanalının ID'sini buraya yaz!
     SUNUCU_IP: "oyna.kunefesmp.com.tr" // Takip edilecek Minecraft IP'si
 };
 
@@ -81,6 +83,30 @@ client.on('ready', () => {
     
     sunucuDurumGuncelle();
     setInterval(sunucuDurumGuncelle, 30000);
+});
+
+// ================= KARŞILAMA SİSTEMİ (GÖRSELDEKİNİN BİREBİR AYNISI) =================
+client.on('guildMemberAdd', async (member) => {
+    if (!AYARLAR.KARSILAMA_KANAL_ID) return;
+
+    const kanal = member.guild.channels.cache.get(AYARLAR.KARSILAMA_KANAL_ID);
+    if (!kanal) return;
+
+    const embed = new EmbedBuilder()
+        .setAuthor({ 
+            name: 'KünefeSMP', 
+            iconURL: member.guild.iconURL({ dynamic: true }) || client.user.displayAvatarURL() 
+        })
+        .setTitle('Yeni Bir Dostumuz Var!')
+        .setDescription(
+            `Hoşgeldin! ${member} 👋,\n\n` +
+            `Aramıza yeni biri katıldı! ${member}\n` +
+            `**Sunucumuza Hoşgeldin! Rahatına Bak!**`
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setColor(0xFF0000); // Görseldeki kırmızı renk
+
+    await kanal.send({ embeds: [embed] }).catch(err => console.error('Karşılama mesajı atılamadı:', err));
 });
 
 // ================= KOMUTLAR VE MESAJ KONTROLLERİ =================
@@ -243,7 +269,7 @@ client.on('messageCreate', async (message) => {
                 .setStyle(ButtonStyle.Primary)
         );
 
-        await message.delete();
+        await message.delete().catch(() => {});
         await message.channel.send({ embeds: [embed], components: [buton] });
     }
 });
@@ -376,4 +402,4 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // Botu Başlat
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN || AYARLAR.TOKEN);
