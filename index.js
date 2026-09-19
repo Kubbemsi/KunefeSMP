@@ -56,7 +56,7 @@ async function sunucuDurumGuncelle() {
             client.user.setPresence({
                 activities: [{ 
                     name: 'custom',
-                    state: `🟢 ${data.players.online}/${data.players.max} Oyuncu \v  ${AYARLAR.SUNUCU_IP} | ⚔️ 1.21+ Survival`, 
+                    state: `🟢 ${data.players.online}/${data.players.max} Oyuncu | ${AYARLAR.SUNUCU_IP} | ⚔️ 1.21+ Survival`, 
                     type: ActivityType.Custom 
                 }],
                 status: 'online'
