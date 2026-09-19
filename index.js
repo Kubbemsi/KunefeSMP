@@ -40,7 +40,7 @@ const KUFUR_LISTESI = [
     'yarrak', 'orospu', 'ibne', 'yavşak', 'puşt', 'döl'
 ];
 
-// Reklam ve Link Kontrolü (.com, .net, .org, .com.tr vb. tüm domainleri kesin olarak yakalar)
+// Reklam ve Link Kontrolü
 const REKLAM_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li|com\/invite)|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)/i;
 
 // Öneri oylarını hafızada tutmak için kullanılan obje
@@ -55,7 +55,8 @@ async function sunucuDurumGuncelle() {
         if (data.online) {
             client.user.setPresence({
                 activities: [{ 
-                    name: `🟢 ${data.players.online}/${data.players.max} Oyuncu \vert{}${AYARLAR.SUNUCU_IP}`, 
+                    name: 'custom',
+                    state: `🟢 ${data.players.online}/${data.players.max} Oyuncu \vert{}${AYARLAR.SUNUCU_IP} | ⚔️ 1.21+ Survival`, 
                     type: ActivityType.Custom 
                 }],
                 status: 'online'
@@ -63,7 +64,8 @@ async function sunucuDurumGuncelle() {
         } else {
             client.user.setPresence({
                 activities: [{ 
-                    name: `🔴 Sunucu Kapalı | ${AYARLAR.SUNUCU_IP}`, 
+                    name: 'custom',
+                    state: `🔴 Sunucu Bakımda | ${AYARLAR.SUNUCU_IP} | 🛠️ Yakında Aktif!`, 
                     type: ActivityType.Custom 
                 }],
                 status: 'dnd'
