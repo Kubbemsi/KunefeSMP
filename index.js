@@ -71,6 +71,36 @@ client.on('ready', () => {
 // ================= KOMUTLAR =================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+    // --- ÖNERİ SİSTEMİ ---
+    if (message.content.startsWith('!öneri ') || message.content.startsWith('!oneri ')) {
+        const oneriMetni = message.content.slice(7).trim();
+        if (!oneriMetni) return message.reply('❌ Lütfen bir öneri metni girin! Örnek: `!öneri VIP üyelere özel kozmetik gelsin.`');
+
+        const oneriEmbed = new EmbedBuilder()
+            .setTitle('💡 Yeni Sunucu Önerisi')
+            .setDescription(oneriMetni)
+            .setColor(0xF1C40F) // Sarı renk
+            .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
+            .setFooter({ text: 'KünefeSMP • Öneri Sistemi' })
+            .setTimestamp();
+
+        const oyButonlari = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('oneri_evet')
+                .setLabel('Evet (0)')
+                .setEmoji('👍')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('oneri_hayir')
+                .setLabel('Hayır (0)')
+                .setEmoji('👎')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        await message.delete().catch(() => {});
+        await message.channel.send({ embeds: [oneriEmbed], components: [oyButonlari] });
+        return;
+    }
     // YENİ EKLENEN KOD:
     const icerik = message.content.toLowerCase().trim();
 
