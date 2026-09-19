@@ -34,6 +34,16 @@ const AYARLAR = {
     SUNUCU_IP: "oyna.kunefesmp.com.tr" // Takip edilecek Minecraft IP'si
 };
 
+// --- FİLTRE LİSTELERİ VE KONTROLLERİ ---
+// İstediğin küfür/yasaklı kelimeleri buraya küçük harfle ekleyebilirsin:
+const KUFUR_LISTESI = [
+    'amk', 'aq', 'oç', 'oc', 'piç', 'pic', 'sik', 'sikerim', 
+    'yarrak', 'orospu', 'ibne', 'yavşak', 'puşt', 'döl'
+];
+
+// Reklam ve Link Kontrolü (Discord davet linkleri ve genel siteler)
+const REKLAM_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li|com\/invite)|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/gi;
+
 // Öneri oylarını hafızada tutmak için kullanılan obje
 const oneriOylari = {};
 
@@ -72,9 +82,39 @@ client.on('ready', () => {
     setInterval(sunucuDurumGuncelle, 30000);
 });
 
-// ================= KOMUTLAR =================
+// ================= KOMUTLAR VE MESAJ KONTROLLERİ =================
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
+    if (message.author.bot || !message.guild) return;
+
+    // --- KÜFÜR VE REKLAM FİLTRESİ ---
+    // Yöneticiler ve yetkili rolündekiler filtreye takılmaz
+    const isYetkili = message.member?.permissions.has(PermissionsBitField.Flags.Administrator) ||
+                      (AYARLAR.YETKILI_ROL_ID && message.member?.roles.cache.has(AYARLAR.YETKILI_ROL_ID));
+
+    if (!isYetkili) {
+        const icerikKucuk = message.content.toLowerCase();
+
+        // 1. Reklam Kontrolü
+        if (REKLAM_REGEX.test(message.content)) {
+            await message.delete().catch(() => {});
+            const uyari = await message.channel.send(`⚠️ ${message.author}, sunucuda reklam yapmak veya dış bağlantı/link paylaşmak yasaktır!`);
+            setTimeout(() => uyari.delete().catch(() => {}), 4000);
+            return;
+        }
+
+        // 2. Küfür Kontrolü
+        const kufurVarMi = KUFUR_LISTESI.some(kelime => {
+            const regex = new RegExp(`\\b${kelime}\\b`, 'i');
+            return regex.test(icerikKucuk) || icerikKucuk.includes(kelime);
+        });
+
+        if (kufurVarMi) {
+            await message.delete().catch(() => {});
+            const uyari = await message.channel.send(`⚠️ ${message.author}, lütfen sunucu içerisinde küfür ve hakaret içerikli kelimeler kullanma!`);
+            setTimeout(() => uyari.delete().catch(() => {}), 4000);
+            return;
+        }
+    }
 
     // --- ÖNERİ SİSTEMİ ---
     if (message.content.startsWith('!öneri ') || message.content.startsWith('!oneri ')) {
