@@ -41,7 +41,7 @@ async function sunucuDurumGuncelle() {
         if (data.online) {
             client.user.setPresence({
                 activities: [{ 
-                    name: `🟢 ${data.players.online}/${data.players.max} Oyuncu | ${AYARLAR.SUNUCU_IP}`, 
+                    name: `🟢 ${data.players.online}/${data.players.max} Oyuncu \vert{}${AYARLAR.SUNUCU_IP}`, 
                     type: ActivityType.Custom 
                 }],
                 status: 'online'
@@ -109,7 +109,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // --- !destek-kur KOMUTU (Eski Destek Sistemi) ---
+    // --- !destek-kur KOMUTU ---
     if (message.content === '!destek-kur') {
         if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return message.reply('❌ Bu komutu sadece yöneticiler kullanabilir!');
@@ -220,17 +220,11 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.customId === 'bilet_kapat') {
-        await interaction.reply({
-            content: '🔒 Bu talep **5 saniye** içinde siliniyor...'
-        });
-
-        setTimeout(async () => {
-            try {
-                await interaction.channel.delete();
-            } catch (err) {
-                console.error('Kanal silinirken hata:', err);
-            }
-        }, 5000);
+        try {
+            await interaction.channel.delete();
+        } catch (err) {
+            console.error('Kanal silinirken hata:', err);
+        }
     }
 });
 
