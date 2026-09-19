@@ -29,12 +29,12 @@ const client = new Client({
 const AYARLAR = {
     TOKEN: "MTU0NzI3NDc3OTk5MDQzMzg0Mg.G0XpIu.ldLT3fa-49EEuHAkQUVczjHJnX6XpUpnuYM2uE", // Bot Tokenin
     YETKILI_ROL_ID: "1539629513753755760", // Yetkili Rolünün ID'si
-    KATEGORI_ID: "1547551650464530462", // Biletlerin açılacağı kategori ID'si (İsteğe bağlı)
+    KATEGORI_ID: "1547551650464530462", // Biletlerin açılacağı kategori ID'si
+    ONERI_KANAL_ID: "1550824276305776660", // Önerilerin atılacağı kanal ID'si
     SUNUCU_IP: "oyna.kunefesmp.com.tr" // Takip edilecek Minecraft IP'si
 };
 
 // Öneri oylarını hafızada tutmak için kullanılan obje
-// Örnek yapı: { messageId: { evet: ['userId1', 'userId2'], hayir: ['userId3'] } }
 const oneriOylari = {};
 
 // ================= CANLI DURUM GÜNCELLEME =================
@@ -78,7 +78,15 @@ client.on('messageCreate', async (message) => {
 
     // --- ÖNERİ SİSTEMİ ---
     if (message.content.startsWith('!öneri ') || message.content.startsWith('!oneri ')) {
-        const oneriMetni = message.content.slice(7).trim();
+        // Kanal kontrolü
+        if (AYARLAR.ONERI_KANAL_ID && message.channel.id !== AYARLAR.ONERI_KANAL_ID) {
+            await message.delete().catch(() => {});
+            const uyari = await message.channel.send(`❌ Öneri komutunu yalnızca <#${AYARLAR.ONERI_KANAL_ID}> kanalında kullanabilirsin!`);
+            setTimeout(() => uyari.delete().catch(() => {}), 5000);
+            return;
+        }
+
+        const oneriMetni = message.content.slice(message.content.indexOf(' ') + 1).trim();
         if (!oneriMetni) return message.reply('❌ Lütfen bir öneri metni girin! Örnek: `!öneri VIP üyelere özel kozmetik gelsin.`');
 
         const oneriEmbed = new EmbedBuilder()
@@ -291,7 +299,6 @@ client.on('interactionCreate', async (interaction) => {
             const msgId = interaction.message.id;
             const userId = interaction.user.id;
 
-            // Eğer mesaj hafızada yoksa başlat
             if (!oneriOylari[msgId]) {
                 oneriOylari[msgId] = { evet: [], hayir: [] };
             }
@@ -299,19 +306,15 @@ client.on('interactionCreate', async (interaction) => {
             const oyVerileri = oneriOylari[msgId];
 
             if (interaction.customId === 'oneri_evet') {
-                // Zaten Evet oyu verdiyse uyar
                 if (oyVerileri.evet.includes(userId)) {
                     return interaction.reply({ content: '❌ Zaten "Evet" oyu kullanmışsınız!', ephemeral: true });
                 }
-                // Hayır listesinden çıkar, Evet listesine ekle
                 oyVerileri.hayir = oyVerileri.hayir.filter(id => id !== userId);
                 oyVerileri.evet.push(userId);
             } else if (interaction.customId === 'oneri_hayir') {
-                // Zaten Hayır oyu verdiyse uyar
                 if (oyVerileri.hayir.includes(userId)) {
                     return interaction.reply({ content: '❌ Zaten "Hayır" oyu kullanmışsınız!', ephemeral: true });
                 }
-                // Evet listesinden çıkar, Hayır listesine ekle
                 oyVerileri.evet = oyVerileri.evet.filter(id => id !== userId);
                 oyVerileri.hayir.push(userId);
             }
