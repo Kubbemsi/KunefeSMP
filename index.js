@@ -33,6 +33,7 @@ const client = new Client({
 // ================= AYARLAR =================
 const AYARLAR = {
     TOKEN: 'MTU0NzI3NDc3OTk5MDQzMzg0Mg.G0XpIu.ldLT3fa-49EEuHAkQUVczjHJnX6XpUpnuYM2uE', // Eski token (geçersiz; yeni TOKEN ortam değişkeni varsa o kullanılır)
+    KURUCU_ROL_ID: "", // İstersen kurucu rolünün ID'sini buraya ekle
     YETKILI_ROL_ID: "1539629513753755760", // Yetkili Rolünün ID'si
     KATEGORI_ID: "1547551650464530462", // Biletlerin açılacağı kategori ID'si
     ONERI_KANAL_ID: "1550824276305776660", // Önerilerin atılacağı kanal ID'si
@@ -51,6 +52,7 @@ const REKLAM_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li|com\/invite)|
 
 // Öneri oylarını hafızada tutmak için kullanılan obje
 const oneriOylari = {};
+const etkinlikKatilimlari = {};
 
 // ================= CANLI DURUM GÜNCELLEME =================
 async function sunucuDurumGuncelle() {
@@ -244,6 +246,63 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+    // --- !etkinlik KOMUTU ---
+    if (message.content.toLowerCase().startsWith('!etkinlik')) {
+        const yonetici = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
+        const sunucuSahibi = message.author.id === message.guild.ownerId;
+        const kurucuRol = AYARLAR.KURUCU_ROL_ID && message.member?.roles.cache.has(AYARLAR.KURUCU_ROL_ID);
+        if (!yonetici && !sunucuSahibi && !kurucuRol) {
+            return message.reply('❌ Bu komutu yalnızca yöneticiler veya kurucular kullanabilir.');
+        }
+
+        const girdi = message.content.slice('!etkinlik'.length).trim();
+        let zaman, yer;
+        if (girdi.includes('|')) {
+            [zaman, yer] = girdi.split('|', 2).map(parca => parca.trim());
+        } else {
+            const bolumler = girdi.split(/\s+/);
+            zaman = bolumler.shift();
+            yer = bolumler.join(' ').trim();
+        }
+        if (!zaman || !yer) {
+            return message.reply('📝 Kullanım: `!etkinlik <zaman> | <yer>`\nÖrnek: `!etkinlik Yarın 20:00 | Spawn alanı`');
+        }
+        if (zaman.length > 100 || yer.length > 100) {
+            return message.reply('❌ Zaman ve yer bilgisi en fazla 100 karakter olabilir.');
+        }
+
+        const etkinlikEmbed = new EmbedBuilder()
+            .setColor(0x8E44AD)
+            .setAuthor({
+                name: 'KünefeSMP • Etkinlik Duyurusu',
+                iconURL: message.guild.iconURL({ dynamic: true }) || client.user.displayAvatarURL()
+            })
+            .setTitle('🎉 Yeni Bir Etkinlik Başlıyor!')
+            .setDescription(
+                `Selam **KünefeSMP ailesi!** 🍯\n\n` +
+                `Birlikte eğlenmeye hazır mısınız? Sunucumuzda yeni bir etkinlik düzenleniyor! ` +
+                `Katılmak istiyorsan aşağıdaki **Katılacağım** düğmesine bas. 💜`
+            )
+            .addFields(
+                { name: '🕒 Zaman', value: zaman, inline: true },
+                { name: '📍 Buluşma yeri', value: yer, inline: true },
+                { name: '🎮 Sunucu', value: AYARLAR.SUNUCU_IP, inline: true }
+            )
+            .setFooter({ text: 'Katılımını düğmeye basarak bildir • KünefeSMP' })
+            .setTimestamp();
+
+        const katilButonu = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('etkinlik_katil')
+                .setLabel('Katılacağım (0)')
+                .setEmoji('🙋')
+                .setStyle(ButtonStyle.Success)
+        );
+        await message.channel.send({ embeds: [etkinlikEmbed], components: [katilButonu] });
+        await message.delete().catch(() => {});
+        return;
+    }
+
     // --- !destek-kur KOMUTU ---
     if (message.content === '!destek-kur') {
         if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -345,6 +404,24 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: '🔒 Destek talebi kapatılıyor…', ephemeral: true });
         await interaction.channel.delete().catch(err => console.error('Kanal silinemedi:', err));
         return;
+    }
+
+    if (interaction.customId === 'etkinlik_katil') {
+        const mesajId = interaction.message.id;
+        if (!etkinlikKatilimlari[mesajId]) etkinlikKatilimlari[mesajId] = new Set();
+        const katilimcilar = etkinlikKatilimlari[mesajId];
+        const zatenKatilmis = katilimcilar.has(interaction.user.id);
+        if (zatenKatilmis) katilimcilar.delete(interaction.user.id);
+        else katilimcilar.add(interaction.user.id);
+        const yeniButon = ButtonBuilder.from(interaction.message.components[0].components[0])
+            .setLabel(`Katılacağım (${katilimcilar.size})`);
+        await interaction.update({
+            components: [new ActionRowBuilder().addComponents(yeniButon)]
+        });
+        return interaction.followUp({
+            content: zatenKatilmis ? 'Etkinlik katılımını kaldırdım.' : 'Etkinliğe katılımını ekledim! Görüşürüz 🎉',
+            ephemeral: true
+        });
     }
 
     if (interaction.customId === 'oneri_evet' || interaction.customId === 'oneri_hayir') {
