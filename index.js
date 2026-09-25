@@ -9,8 +9,12 @@ const {
     Client, 
     GatewayIntentBits, 
     ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
+    ButtonBuilder,
+    ButtonStyle,
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle, 
     EmbedBuilder, 
     ChannelType, 
     PermissionsBitField,
@@ -28,7 +32,7 @@ const client = new Client({
 
 // ================= AYARLAR =================
 const AYARLAR = {
-    TOKEN: "MTU0NzI3NDc3OTk5MDQzMzg0Mg.G0XpIu.ldLT3fa-49EEuHAkQUVczjHJnX6XpUpnuYM2uE", // Bot Tokenin
+    TOKEN: 'MTU0NzI3NDc3OTk5MDQzMzg0Mg.G0XpIu.ldLT3fa-49EEuHAkQUVczjHJnX6XpUpnuYM2uE', // Eski token (geçersiz; yeni TOKEN ortam değişkeni varsa o kullanılır)
     YETKILI_ROL_ID: "1539629513753755760", // Yetkili Rolünün ID'si
     KATEGORI_ID: "1547551650464530462", // Biletlerin açılacağı kategori ID'si
     ONERI_KANAL_ID: "1550824276305776660", // Önerilerin atılacağı kanal ID'si
@@ -276,128 +280,91 @@ client.on('messageCreate', async (message) => {
 
 // ================= BUTON İŞLEMLERİ =================
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return;
+    if (interaction.isButton() && interaction.customId === 'bilet_olustur') {
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId('bilet_kategori_secimi')
+            .setPlaceholder('Destek konusunu seç')
+            .addOptions(
+                { label: 'Teknik sorun', description: 'Sunucuya giriş veya oyun içi teknik sorunlar', value: 'teknik', emoji: '🛠️' },
+                { label: 'Oyuncu bildirimi', description: 'Bir oyuncuyla ilgili bildirim veya şikâyet', value: 'oyuncu', emoji: '👤' },
+                { label: 'Mağaza / ödeme', description: 'Mağaza alışverişi ve ödeme sorunları', value: 'magaza', emoji: '🛒' },
+                { label: 'Öneri / diğer', description: 'Öneri veya diğer konular', value: 'diger', emoji: '💡' }
+            );
+        return interaction.reply({ content: '🎫 Hangi konuda destek istiyorsun?', components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+    }
 
-    // --- DESTEK SİSTEMİ BUTONLARI ---
-    if (interaction.customId === 'bilet_olustur') {
-        const kanalAdi = `talep-${interaction.user.username.toLowerCase()}`;
-        const mevcutKanal = interaction.guild.channels.cache.find(c => c.name === kanalAdi);
+    if (interaction.isStringSelectMenu() && interaction.customId === 'bilet_kategori_secimi') {
+        const kategori = interaction.values[0];
+        const basliklar = { teknik: 'Teknik Sorun', oyuncu: 'Oyuncu Bildirimi', magaza: 'Mağaza / Ödeme', diger: 'Öneri / Diğer' };
+        const modal = new ModalBuilder().setCustomId(`bilet_form:${kategori}`).setTitle(`${basliklar[kategori]} Talebi`);
+        const oyuncuAdi = new TextInputBuilder().setCustomId('minecraft_adi').setLabel('Minecraft kullanıcı adın').setStyle(TextInputStyle.Short).setPlaceholder('Örnek: UnplugMC').setRequired(true).setMaxLength(32);
+        const aciklama = new TextInputBuilder().setCustomId('talep_aciklamasi').setLabel('Sorununu veya önerini açıkla').setStyle(TextInputStyle.Paragraph).setPlaceholder('Ne olduğunu ve varsa ne zaman yaşandığını yaz. Kanıtı talep odasına ekleyebilirsin.').setRequired(true).setMinLength(5).setMaxLength(1000);
+        modal.addComponents(new ActionRowBuilder().addComponents(oyuncuAdi), new ActionRowBuilder().addComponents(aciklama));
+        return interaction.showModal(modal);
+    }
 
-        if (mevcutKanal) {
-            return interaction.reply({
-                content: `❌ Zaten açık bir destek talebin bulunuyor: ${mevcutKanal}`,
-                ephemeral: true
-            });
-        }
-
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('bilet_form:')) {
+        const kategori = interaction.customId.split(':')[1];
+        const bilgi = { teknik: { ad: 'teknik', baslik: '🛠️ Teknik Sorun' }, oyuncu: { ad: 'oyuncu', baslik: '👤 Oyuncu Bildirimi' }, magaza: { ad: 'magaza', baslik: '🛒 Mağaza / Ödeme' }, diger: { ad: 'diger', baslik: '💡 Öneri / Diğer' } }[kategori];
+        if (!bilgi) return interaction.reply({ content: '❌ Kategori geçerli değil. Lütfen yeniden dene.', ephemeral: true });
         await interaction.deferReply({ ephemeral: true });
-
-        const permissionOverwrites = [
-            {
-                id: interaction.guild.id,
-                deny: [PermissionsBitField.Flags.ViewChannel]
-            },
-            {
-                id: interaction.user.id,
-                allow: [
-                    PermissionsBitField.Flags.ViewChannel,
-                    PermissionsBitField.Flags.SendMessages,
-                    PermissionsBitField.Flags.AttachFiles,
-                    PermissionsBitField.Flags.ReadMessageHistory
-                ]
-            }
+        const ticketTopic = `kunefesmp-ticket:${interaction.user.id}`;
+        const mevcut = interaction.guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.topic === ticketTopic);
+        if (mevcut) return interaction.editReply({ content: `❌ Zaten açık bir destek talebin var: ${mevcut}` });
+        const guvenliAd = interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 35) || 'oyuncu';
+        const izinler = [
+            { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+            { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles, PermissionsBitField.Flags.ReadMessageHistory] }
         ];
-
         if (AYARLAR.YETKILI_ROL_ID && interaction.guild.roles.cache.has(AYARLAR.YETKILI_ROL_ID)) {
-            permissionOverwrites.push({
-                id: AYARLAR.YETKILI_ROL_ID,
-                allow: [
-                    PermissionsBitField.Flags.ViewChannel,
-                    PermissionsBitField.Flags.SendMessages,
-                    PermissionsBitField.Flags.AttachFiles,
-                    PermissionsBitField.Flags.ReadMessageHistory
-                ]
-            });
+            izinler.push({ id: AYARLAR.YETKILI_ROL_ID, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles, PermissionsBitField.Flags.ReadMessageHistory] });
         }
-
-        const kanal = await interaction.guild.channels.create({
-            name: kanalAdi,
-            type: ChannelType.GuildText,
-            parent: AYARLAR.KATEGORI_ID || null,
-            permissionOverwrites: permissionOverwrites
-        });
-
-        const icEmbed = new EmbedBuilder()
-            .setTitle('🎫 Destek Talebi')
-            .setDescription(`Merhaba ${interaction.user}, yetkili ekibimiz en kısa sürede seninle ilgilenecektir.\n\nLütfen sorununuzu detaylı bir şekilde açıklayın.`)
-            .setColor(0x2ECC71);
-
-        const kapatButon = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('bilet_kapat')
-                .setLabel('Talebi Kapat')
-                .setEmoji('🔒')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-        await kanal.send({ 
-            content: `${interaction.user} ${AYARLAR.YETKILI_ROL_ID ? `<@&${AYARLAR.YETKILI_ROL_ID}>` : ''}`, 
-            embeds: [icEmbed], 
-            components: [kapatButon] 
-        });
-
-        await interaction.editReply({
-            content: `✅ Destek talebiniz oluşturuldu: ${kanal}`
-        });
-    }
-
-    if (interaction.customId === 'bilet_kapat') {
         try {
-            await interaction.channel.delete();
+            const kanal = await interaction.guild.channels.create({ name: `talep-${bilgi.ad}-${guvenliAd}`.slice(0, 90), type: ChannelType.GuildText, parent: AYARLAR.KATEGORI_ID || null, topic: ticketTopic, permissionOverwrites: izinler });
+            const minecraftAdi = interaction.fields.getTextInputValue('minecraft_adi');
+            const aciklamaMetni = interaction.fields.getTextInputValue('talep_aciklamasi');
+            const embed = new EmbedBuilder().setTitle(bilgi.baslik).setDescription(aciklamaMetni).addFields(
+                { name: 'Oyuncu', value: `${interaction.user}`, inline: true },
+                { name: 'Minecraft adı', value: `\`${minecraftAdi}\``, inline: true }
+            ).setColor(0xE67E22).setTimestamp();
+            const kapat = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('bilet_kapat').setLabel('Talebi Kapat').setEmoji('🔒').setStyle(ButtonStyle.Danger));
+            await kanal.send({ content: `${interaction.user} ${AYARLAR.YETKILI_ROL_ID ? `<@&${AYARLAR.YETKILI_ROL_ID}>` : ''}`, embeds: [embed], components: [kapat] });
+            await interaction.editReply({ content: `✅ ${bilgi.baslik} talebin oluşturuldu: ${kanal}` });
         } catch (err) {
-            console.error('Kanal silinirken hata:', err);
+            console.error('Destek talebi oluşturulamadı:', err);
+            await interaction.editReply({ content: '❌ Talep oluşturulamadı. Botun kanal oluşturma izinlerini ve kategori ayarını kontrol edin.' });
         }
+        return;
     }
 
-    // --- TEK OYLU GÜVENLİ ÖNERİ OYLAMA İŞLEMİ ---
+    if (!interaction.isButton()) return;
+    if (interaction.customId === 'bilet_kapat') {
+        const yetkili = interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageChannels) || interaction.member?.roles?.cache?.has(AYARLAR.YETKILI_ROL_ID);
+        const talepSahibi = interaction.channel?.topic === `kunefesmp-ticket:${interaction.user.id}`;
+        if (!yetkili && !talepSahibi) return interaction.reply({ content: '❌ Bu talebi kapatma yetkin yok.', ephemeral: true });
+        await interaction.reply({ content: '🔒 Destek talebi kapatılıyor…', ephemeral: true });
+        await interaction.channel.delete().catch(err => console.error('Kanal silinemedi:', err));
+        return;
+    }
+
     if (interaction.customId === 'oneri_evet' || interaction.customId === 'oneri_hayir') {
         try {
             const msgId = interaction.message.id;
             const userId = interaction.user.id;
-
-            if (!oneriOylari[msgId]) {
-                oneriOylari[msgId] = { evet: [], hayir: [] };
-            }
-
-            const oyVerileri = oneriOylari[msgId];
-
+            if (!oneriOylari[msgId]) oneriOylari[msgId] = { evet: [], hayir: [] };
+            const oy = oneriOylari[msgId];
             if (interaction.customId === 'oneri_evet') {
-                if (oyVerileri.evet.includes(userId)) {
-                    return interaction.reply({ content: '❌ Zaten "Evet" oyu kullanmışsınız!', ephemeral: true });
-                }
-                oyVerileri.hayir = oyVerileri.hayir.filter(id => id !== userId);
-                oyVerileri.evet.push(userId);
-            } else if (interaction.customId === 'oneri_hayir') {
-                if (oyVerileri.hayir.includes(userId)) {
-                    return interaction.reply({ content: '❌ Zaten "Hayır" oyu kullanmışsınız!', ephemeral: true });
-                }
-                oyVerileri.evet = oyVerileri.evet.filter(id => id !== userId);
-                oyVerileri.hayir.push(userId);
+                if (oy.evet.includes(userId)) return interaction.reply({ content: '❌ Zaten "Evet" oyu kullanmışsınız!', ephemeral: true });
+                oy.hayir = oy.hayir.filter(id => id !== userId); oy.evet.push(userId);
+            } else {
+                if (oy.hayir.includes(userId)) return interaction.reply({ content: '❌ Zaten "Hayır" oyu kullanmışsınız!', ephemeral: true });
+                oy.evet = oy.evet.filter(id => id !== userId); oy.hayir.push(userId);
             }
-
             const row = interaction.message.components[0];
-            let evetButon = ButtonBuilder.from(row.components[0]);
-            let hayirButon = ButtonBuilder.from(row.components[1]);
-
-            evetButon.setLabel(`Evet (${oyVerileri.evet.length})`);
-            hayirButon.setLabel(`Hayır (${oyVerileri.hayir.length})`);
-
-            const yeniRow = new ActionRowBuilder().addComponents(evetButon, hayirButon);
-
-            await interaction.update({ components: [yeniRow] });
-        } catch (err) {
-            console.error('Oylama hatası:', err);
-        }
+            const evet = ButtonBuilder.from(row.components[0]).setLabel(`Evet (${oy.evet.length})`);
+            const hayir = ButtonBuilder.from(row.components[1]).setLabel(`Hayır (${oy.hayir.length})`);
+            await interaction.update({ components: [new ActionRowBuilder().addComponents(evet, hayir)] });
+        } catch (err) { console.error('Oylama hatası:', err); }
     }
 });
 
