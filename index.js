@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 10000;
@@ -53,7 +55,15 @@ const REKLAM_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li|com\/invite)|
 const oneriOylari = {};
 const etkinlikKatilimlari = {};
 const cekilisler = new Map();
-let youtubeSonVideoId = null;
+const YOUTUBE_DURUM_DOSYASI = path.join(__dirname, 'youtube-video-state.json');
+let youtubeGorulenVideolar = new Set();
+let youtubeKontrolEdiliyor = false;
+try {
+    const youtubeDurumu = JSON.parse(fs.readFileSync(YOUTUBE_DURUM_DOSYASI, 'utf8'));
+    youtubeGorulenVideolar = new Set(youtubeDurumu.gorulenVideoIdleri || []);
+} catch {
+    // İlk çalıştırmada durum dosyası henüz olmayabilir.
+}
 
 // ================= YOUTUBE YENİ VİDEO TAKİBİ =================
 function xmlMetniniCoz(metin) {
@@ -65,30 +75,48 @@ function xmlMetniniCoz(metin) {
         .replace(/&#39;/g, "'");
 }
 
+function youtubeDurumunuKaydet() {
+    const gorulenVideoIdleri = [...youtubeGorulenVideolar].slice(-100);
+    youtubeGorulenVideolar = new Set(gorulenVideoIdleri);
+    fs.writeFileSync(YOUTUBE_DURUM_DOSYASI, JSON.stringify({ gorulenVideoIdleri }, null, 2));
+}
+
 async function youtubeSonVideoKontrolEt() {
+    if (youtubeKontrolEdiliyor) return;
     const kanalId = AYARLAR.YOUTUBE_KANAL_ID;
     const discordKanalId = AYARLAR.YOUTUBE_DUYURU_KANAL_ID;
     if (!kanalId || kanalId.startsWith('BURAYA_') || !discordKanalId || discordKanalId.startsWith('BURAYA_')) return;
 
+    youtubeKontrolEdiliyor = true;
     try {
         const yanit = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(kanalId)}`);
         if (!yanit.ok) throw new Error(`YouTube RSS yanıtı: ${yanit.status}`);
         const xml = await yanit.text();
-        const entry = xml.match(/<entry>([\s\S]*?)<\/entry>/)?.[1];
-        if (!entry) return;
+        const videolar = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)]
+            .map(eslesme => {
+                const entry = eslesme[1];
+                const videoId = entry.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1];
+                const baslik = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1];
+                const yayinTarihi = entry.match(/<published>([^<]+)<\/published>/)?.[1];
+                return videoId && baslik
+                    ? { videoId, baslik: xmlMetniniCoz(baslik), yayinZamani: Date.parse(yayinTarihi || '') || 0 }
+                    : null;
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.yayinZamani - b.yayinZamani);
 
-        const videoId = entry.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1];
-        const baslikHam = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1];
-        if (!videoId || !baslikHam) return;
+        if (!videolar.length) return;
 
-        // İlk kontrolde eski videoyu duyurmaz; yalnızca bundan sonraki yüklemeleri paylaşır.
-        if (youtubeSonVideoId === null) {
-            youtubeSonVideoId = videoId;
-            console.log('[YouTube] Kanal takibi başladı; mevcut son video başlangıç noktası alındı.');
+        // İlk açılışta RSS'teki mevcut videoları başlangıç listesine al, geçmiş videoları paylaşma.
+        if (youtubeGorulenVideolar.size === 0) {
+            for (const video of videolar) youtubeGorulenVideolar.add(video.videoId);
+            youtubeDurumunuKaydet();
+            console.log('[YouTube] Başlangıç videoları kaydedildi; yeni yüklemeler beklenecek.');
             return;
         }
-        if (videoId === youtubeSonVideoId) return;
-        youtubeSonVideoId = videoId;
+
+        const yeniVideolar = videolar.filter(video => !youtubeGorulenVideolar.has(video.videoId));
+        if (!yeniVideolar.length) return;
 
         const duyuruKanali = await client.channels.fetch(discordKanalId);
         if (!duyuruKanali?.isTextBased()) {
@@ -96,22 +124,35 @@ async function youtubeSonVideoKontrolEt() {
             return;
         }
 
-        const baslik = xmlMetniniCoz(baslikHam);
-        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const embed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setAuthor({ name: 'UnplugMC • Yeni Video', iconURL: client.user.displayAvatarURL() })
-            .setTitle(baslik.slice(0, 256))
-            .setURL(videoUrl)
-            .setDescription(`🎬 **UnplugMC yeni bir video paylaştı!**\n\n[Videoyu izlemek için tıkla](${videoUrl})`)
-            .setImage(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`)
-            .setFooter({ text: 'KünefeSMP • YouTube duyuruları' })
-            .setTimestamp();
+        for (const video of yeniVideolar) {
+            const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
+            // Bot yeniden başlatılsa veya ikinci kopyası çalışsa bile son mesajlarda aynı URL varsa tekrarlama.
+            const sonMesajlar = await duyuruKanali.messages.fetch({ limit: 100 }).catch(() => null);
+            const zatenDuyurulmus = sonMesajlar?.some(mesaj =>
+                mesaj.content.includes(videoUrl) ||
+                mesaj.embeds.some(embed => embed.url === videoUrl || embed.description?.includes(videoUrl))
+            );
 
-        await duyuruKanali.send({ embeds: [embed] });
-        console.log(`[YouTube] Yeni video duyuruldu: ${videoId}`);
+            if (!zatenDuyurulmus) {
+                const embed = new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setAuthor({ name: 'UnplugMC • Yeni Video', iconURL: client.user.displayAvatarURL() })
+                    .setTitle(video.baslik.slice(0, 256))
+                    .setURL(videoUrl)
+                    .setDescription(`🎬 **UnplugMC yeni bir video paylaştı!**\n\n[Videoyu izlemek için tıkla](${videoUrl})`)
+                    .setImage(`https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`)
+                    .setFooter({ text: 'KünefeSMP • YouTube duyuruları' })
+                    .setTimestamp(video.yayinZamani || Date.now());
+                await duyuruKanali.send({ embeds: [embed] });
+            }
+
+            youtubeGorulenVideolar.add(video.videoId);
+            youtubeDurumunuKaydet();
+        }
     } catch (err) {
         console.error('YouTube videosu kontrol edilemedi:', err);
+    } finally {
+        youtubeKontrolEdiliyor = false;
     }
 }
 
