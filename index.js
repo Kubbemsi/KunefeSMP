@@ -455,8 +455,9 @@ async function slashKomutunuCalistir(interaction) {
             katilimcilar: new Set(),
             kanalId: interaction.channel.id,
             bitisZamani: bitis,
-            zamanlayici: setTimeout(() => cekilisiBitir(sent.id), sureMs)
+            zamanlayici: null
         });
+        cekilisZamanlayicisiniKur(sent.id, bitis);
         await interaction.editReply({ content: `✅ Çekiliş oluşturuldu: ${sent}` });
         return;
     }
@@ -828,7 +829,23 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 });
+function cekilisZamanlayicisiniKur(duyuruId, bitisZamani) {
+    const cekilis = cekilisler.get(duyuruId);
+    if (!cekilis) return;
 
+    const kalanSure = bitisZamani - Date.now();
+
+    if (kalanSure <= 0) {
+        cekilisiBitir(duyuruId);
+        return;
+    }
+
+    const parcaSure = Math.min(kalanSure, 2_000_000_000);
+
+    cekilis.zamanlayici = setTimeout(() => {
+        cekilisZamanlayicisiniKur(duyuruId, bitisZamani);
+    }, parcaSure);
+}
 async function cekilisiBitir(duyuruId) {
     const cekilis = cekilisler.get(duyuruId);
     if (!cekilis) return;
