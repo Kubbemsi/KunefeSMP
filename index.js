@@ -844,7 +844,7 @@ async function cekilisiBitir(duyuruId) {
 
         if (kazananId) {
             await kanal.send({
-                content: `🎉 Tebrikler <@${kazananId}>! Çekilişi kazandın!Destek talebinden bize ulaşabilirsin!`,
+                content: `🎉 Tebrikler <@${kazananId}>! Çekilişi kazandın! Destek talebinden bize ulaşabilirsin!`,
                 allowedMentions: { users: [kazananId] }
             });
         } else {
