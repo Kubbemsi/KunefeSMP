@@ -20,7 +20,10 @@ const {
     EmbedBuilder,
     ChannelType,
     PermissionsBitField,
-    ActivityType
+    ActivityType,
+    REST,
+    Routes,
+    SlashCommandBuilder
 } = require('discord.js');
 
 const client = new Client({
@@ -41,8 +44,8 @@ const AYARLAR = {
     ONERI_KANAL_ID: "1550824276305776660",
     KARSILAMA_KANAL_ID: "1547561101745459320",
     SUNUCU_IP: "oyna.kunefesmp.com.tr",
-    YOUTUBE_KANAL_ID: "UCAnAOiwGXdOk-axlTTEHloA", // UC ile başlayan YouTube kanal ID'si
-    YOUTUBE_DUYURU_KANAL_ID: "1547583746012610671" // Video duyuru kanalının Discord ID'si
+    YOUTUBE_KANAL_ID: "BURAYA_YOUTUBE_KANAL_ID", // UC ile başlayan YouTube kanal ID'si
+    YOUTUBE_DUYURU_KANAL_ID: "BURAYA_DISCORD_KANAL_ID" // Video duyuru kanalının Discord ID'si
 };
 
 const KUFUR_LISTESI = [
@@ -186,6 +189,40 @@ async function sunucuDurumGuncelle() {
     }
 }
 
+async function slashKomutlariniKaydet() {
+    const guild = client.guilds.cache.first();
+    if (!guild) {
+        console.error('Slash komutları kaydedilemedi: Botun bulunduğu sunucu bulunamadı.');
+        return;
+    }
+
+    const komutlar = [
+        new SlashCommandBuilder().setName('öneri').setDescription('KünefeSMP için öneri gönderir.')
+            .addStringOption(o => o.setName('metin').setDescription('Önerini yaz').setRequired(true)),
+        new SlashCommandBuilder().setName('oneri').setDescription('KünefeSMP için öneri gönderir.')
+            .addStringOption(o => o.setName('metin').setDescription('Önerini yaz').setRequired(true)),
+        new SlashCommandBuilder().setName('sunucu').setDescription('Minecraft sunucusunun durumunu gösterir.'),
+        new SlashCommandBuilder().setName('ip').setDescription('Minecraft sunucusunun durumunu gösterir.'),
+        new SlashCommandBuilder().setName('etkinlik').setDescription('KünefeSMP etkinlik duyurusu oluşturur.')
+            .addStringOption(o => o.setName('zaman').setDescription('Etkinliğin zamanı').setRequired(true))
+            .addStringOption(o => o.setName('yer').setDescription('Buluşma yeri').setRequired(true)),
+        new SlashCommandBuilder().setName('çekiliş').setDescription('Süreli bir KünefeSMP çekilişi başlatır.')
+            .addStringOption(o => o.setName('sure').setDescription('Örnek: 30m, 2h veya 1d').setRequired(true))
+            .addStringOption(o => o.setName('odul').setDescription('Çekiliş ödülü').setRequired(true)),
+        new SlashCommandBuilder().setName('cekilis').setDescription('Süreli bir KünefeSMP çekilişi başlatır.')
+            .addStringOption(o => o.setName('sure').setDescription('Örnek: 30m, 2h veya 1d').setRequired(true))
+            .addStringOption(o => o.setName('odul').setDescription('Çekiliş ödülü').setRequired(true)),
+        new SlashCommandBuilder().setName('destek-kur').setDescription('Destek talebi panelini bu kanala kurar.')
+    ];
+
+    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN || AYARLAR.TOKEN);
+    const route = Routes.applicationGuildCommands(client.user.id, guild.id);
+    for (const komut of komutlar) {
+        await rest.post(route, { body: komut.toJSON() });
+    }
+    console.log(`[+] ${komutlar.length} slash komutu ${guild.name} sunucusuna kaydedildi.`);
+}
+
 client.on('ready', () => {
     console.log(`[+] Bot başarıyla aktif edildi: ${client.user.tag}`);
     sunucuDurumGuncelle();
@@ -193,6 +230,8 @@ client.on('ready', () => {
 
     youtubeSonVideoKontrolEt();
     setInterval(youtubeSonVideoKontrolEt, 120000);
+
+    slashKomutlariniKaydet().catch(err => console.error('Slash komutları kaydedilemedi:', err));
 });
 
 // ================= KARŞILAMA SİSTEMİ =================
@@ -257,53 +296,6 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // --- ÖNERİ SİSTEMİ ---
-    if (message.content.startsWith('!öneri ') || message.content.startsWith('!oneri ')) {
-        if (AYARLAR.ONERI_KANAL_ID && message.channel.id !== AYARLAR.ONERI_KANAL_ID) {
-            await message.delete().catch(() => {});
-            const uyari = await message.channel.send(
-                `❌ Öneri komutunu yalnızca <#${AYARLAR.ONERI_KANAL_ID}> kanalında kullanabilirsin!`
-            );
-            setTimeout(() => uyari.delete().catch(() => {}), 5000);
-            return;
-        }
-
-        const oneriMetni = message.content.slice(message.content.indexOf(' ') + 1).trim();
-        if (!oneriMetni) {
-            return message.reply('❌ Lütfen bir öneri metni girin! Örnek: `!öneri VIP üyelere özel kozmetik gelsin.`');
-        }
-
-        const oneriEmbed = new EmbedBuilder()
-            .setTitle('💡 Yeni Sunucu Önerisi')
-            .setDescription(oneriMetni)
-            .setColor(0xF1C40F)
-            .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
-            .setFooter({ text: 'KünefeSMP • Öneri Sistemi' })
-            .setTimestamp();
-
-        const oyButonlari = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('oneri_evet')
-                .setLabel('Evet (0)')
-                .setEmoji('👍')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('oneri_hayir')
-                .setLabel('Hayır (0)')
-                .setEmoji('👎')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-        await message.delete().catch(() => {});
-        const gonderilenMesaj = await message.channel.send({
-            embeds: [oneriEmbed],
-            components: [oyButonlari]
-        });
-
-        oneriOylari[gonderilenMesaj.id] = { evet: [], hayir: [] };
-        return;
-    }
-
     // --- OTOMATİK SELAM KARŞILAMA ---
     const icerik = message.content.toLowerCase().trim();
 
@@ -326,101 +318,91 @@ client.on('messageCreate', async (message) => {
         return message.reply('as');
     }
 
-    // --- !sunucu ve !ip KOMUTU ---
-    if (message.content === '!sunucu' || message.content === '!ip') {
+
+});
+
+// ================= BUTON İŞLEMLERİ =================
+function komutYetkilisiMi(interaction) {
+    const yonetici = interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator);
+    const sunucuSahibi = interaction.guild?.ownerId === interaction.user.id;
+    const roller = interaction.member?.roles?.cache;
+    const kurucuRol = AYARLAR.KURUCU_ROL_ID && roller?.has(AYARLAR.KURUCU_ROL_ID);
+    return Boolean(yonetici || sunucuSahibi || kurucuRol);
+}
+
+async function slashKomutunuCalistir(interaction) {
+    const ad = interaction.commandName;
+
+    if (ad === 'öneri' || ad === 'oneri') {
+        if (AYARLAR.ONERI_KANAL_ID && interaction.channelId !== AYARLAR.ONERI_KANAL_ID) {
+            return interaction.reply({ content: `❌ Önerini yalnızca <#${AYARLAR.ONERI_KANAL_ID}> kanalında gönderebilirsin.`, ephemeral: true });
+        }
+        const metin = interaction.options.getString('metin', true).trim();
+        if (!metin) return interaction.reply({ content: '❌ Öneri metni boş olamaz.', ephemeral: true });
+        await interaction.deferReply({ ephemeral: true });
+        const embed = new EmbedBuilder()
+            .setTitle('💡 Yeni Sunucu Önerisi')
+            .setDescription(metin)
+            .setColor(0xF1C40F)
+            .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+            .setFooter({ text: 'KünefeSMP • Öneri Sistemi' })
+            .setTimestamp();
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('oneri_evet').setLabel('Evet (0)').setEmoji('👍').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('oneri_hayir').setLabel('Hayır (0)').setEmoji('👎').setStyle(ButtonStyle.Danger)
+        );
+        const sent = await interaction.channel.send({ embeds: [embed], components: [buttons] });
+        oneriOylari[sent.id] = { evet: [], hayir: [] };
+        return interaction.editReply({ content: '✅ Önerin gönderildi!' });
+    }
+
+    if (ad === 'sunucu' || ad === 'ip') {
+        await interaction.deferReply();
         try {
-            const yukleniyor = await message.reply('🔍 Sunucu bilgileri sorgulanıyor...');
             const res = await fetch(`https://api.mcstatus.io/v2/status/java/${AYARLAR.SUNUCU_IP}`);
             const data = await res.json();
-
             if (data.online) {
                 const embed = new EmbedBuilder()
                     .setTitle('🟢 KünefeSMP Çevrimiçi!')
                     .setDescription('Sunucumuz şu an aktif ve oyunculara açık. Hemen katıl!')
                     .setColor(0x2ECC71)
                     .addFields(
-                        {
-                            name: '📡 Sunucu Adresi',
-                            value: `\`${AYARLAR.SUNUCU_IP}\``,
-                            inline: true
-                        },
-                        {
-                            name: '👥 Aktif Oyuncular',
-                            value: `**${data.players.online}** / **${data.players.max}**`,
-                            inline: true
-                        },
-                        {
-                            name: '🎮 Sürüm',
-                            value: '1.21+',
-                            inline: true
-                        }
+                        { name: '📡 Sunucu Adresi', value: `\`${AYARLAR.SUNUCU_IP}\``, inline: true },
+                        { name: '👥 Aktif Oyuncular', value: `**${data.players.online}** / **${data.players.max}**`, inline: true },
+                        { name: '🎮 Sürüm', value: '1.21+', inline: true }
                     )
                     .setFooter({ text: 'KünefeSMP • İyi Oyunlar Dileriz!' })
                     .setTimestamp();
-
-                await yukleniyor.edit({ content: null, embeds: [embed] });
-            } else {
-                const kapaliEmbed = new EmbedBuilder()
-                    .setTitle('🔴 KünefeSMP Şu Anda Kapalı / Bakımda')
-                    .setDescription(
-                        `Sunucumuza şu anda ulaşılamıyor. Bakım veya güncelleme yapılıyor olabilir.\n\n` +
-                        `📡 **IP:** \`${AYARLAR.SUNUCU_IP}\``
-                    )
-                    .setColor(0xE74C3C)
-                    .setFooter({ text: 'Gelişmeler için duyuruları takip edin.' })
-                    .setTimestamp();
-
-                await yukleniyor.edit({ content: null, embeds: [kapaliEmbed] });
+                return interaction.editReply({ embeds: [embed] });
             }
+            const embed = new EmbedBuilder()
+                .setTitle('🔴 KünefeSMP Şu Anda Kapalı / Bakımda')
+                .setDescription(`Sunucumuza şu anda ulaşılamıyor. Bakım veya güncelleme yapılıyor olabilir.\n\n📡 **IP:** \`${AYARLAR.SUNUCU_IP}\``)
+                .setColor(0xE74C3C)
+                .setFooter({ text: 'Gelişmeler için duyuruları takip edin.' })
+                .setTimestamp();
+            return interaction.editReply({ embeds: [embed] });
         } catch (err) {
-            message.reply('❌ Sunucu durumuna ulaşılırken bir hata oluştu.');
+            console.error('Sunucu durumu alınamadı:', err);
+            return interaction.editReply({ content: '❌ Sunucu durumuna ulaşılırken bir hata oluştu.' });
         }
     }
 
-    // --- !etkinlik KOMUTU ---
-    if (message.content.toLowerCase().startsWith('!etkinlik')) {
-        const yonetici = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
-        const sunucuSahibi = message.author.id === message.guild.ownerId;
-        const kurucuRol = AYARLAR.KURUCU_ROL_ID &&
-            message.member?.roles.cache.has(AYARLAR.KURUCU_ROL_ID);
-
-        if (!yonetici && !sunucuSahibi && !kurucuRol) {
-            return message.reply('❌ Bu komutu yalnızca yöneticiler veya kurucular kullanabilir.');
+    if (ad === 'etkinlik') {
+        if (!komutYetkilisiMi(interaction)) {
+            return interaction.reply({ content: '❌ Bu komutu yalnızca yöneticiler veya kurucular kullanabilir.', ephemeral: true });
         }
-
-        const girdi = message.content.slice('!etkinlik'.length).trim();
-        let zaman, yer;
-
-        if (girdi.includes('|')) {
-            [zaman, yer] = girdi.split('|', 2).map(parca => parca.trim());
-        } else {
-            const bolumler = girdi.split(/\s+/);
-            zaman = bolumler.shift();
-            yer = bolumler.join(' ').trim();
-        }
-
-        if (!zaman || !yer) {
-            return message.reply(
-                '📝 Kullanım: `!etkinlik <zaman> | <yer>`\nÖrnek: `!etkinlik Yarın 20:00 | Spawn alanı`'
-            );
-        }
-
+        const zaman = interaction.options.getString('zaman', true).trim();
+        const yer = interaction.options.getString('yer', true).trim();
         if (zaman.length > 100 || yer.length > 100) {
-            return message.reply('❌ Zaman ve yer bilgisi en fazla 100 karakter olabilir.');
+            return interaction.reply({ content: '❌ Zaman ve yer bilgisi en fazla 100 karakter olabilir.', ephemeral: true });
         }
-
-        const etkinlikEmbed = new EmbedBuilder()
+        await interaction.deferReply({ ephemeral: true });
+        const embed = new EmbedBuilder()
             .setColor(0x8E44AD)
-            .setAuthor({
-                name: 'KünefeSMP • Etkinlik Duyurusu',
-                iconURL: message.guild.iconURL({ dynamic: true }) || client.user.displayAvatarURL()
-            })
+            .setAuthor({ name: 'KünefeSMP • Etkinlik Duyurusu', iconURL: interaction.guild.iconURL({ dynamic: true }) || client.user.displayAvatarURL() })
             .setTitle('🎉 Yeni Bir Etkinlik Başlıyor!')
-            .setDescription(
-                `Selam **KünefeSMP ailesi!** 🍯\n\n` +
-                `Birlikte eğlenmeye hazır mısınız? Sunucumuzda yeni bir etkinlik düzenleniyor! ` +
-                `Katılmak istiyorsan aşağıdaki **Katılacağım** düğmesine bas. 💜`
-            )
+            .setDescription('Selam **KünefeSMP ailesi!** 🍯\n\nBirlikte eğlenmeye hazır mısınız? Sunucumuzda yeni bir etkinlik düzenleniyor! Katılmak istiyorsan aşağıdaki **Katılacağım** düğmesine bas. 💜')
             .addFields(
                 { name: '🕒 Zaman', value: zaman, inline: true },
                 { name: '📍 Buluşma yeri', value: yer, inline: true },
@@ -428,115 +410,62 @@ client.on('messageCreate', async (message) => {
             )
             .setFooter({ text: 'Katılımını düğmeye basarak bildir • KünefeSMP' })
             .setTimestamp();
-
-        const katilButonu = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('etkinlik_katil')
-                .setLabel('Katılacağım (0)')
-                .setEmoji('🙋')
-                .setStyle(ButtonStyle.Success)
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('etkinlik_katil').setLabel('Katılacağım (0)').setEmoji('🙋').setStyle(ButtonStyle.Success)
         );
-
-        await message.channel.send({ embeds: [etkinlikEmbed], components: [katilButonu] });
-        await message.delete().catch(() => {});
+        const sent = await interaction.channel.send({ embeds: [embed], components: [row] });
+        await interaction.editReply({ content: `✅ Etkinlik duyurusu oluşturuldu: ${sent}` });
         return;
     }
 
-    // --- !çekiliş KOMUTU ---
-    if (
-        message.content.toLowerCase().startsWith('!çekiliş ') ||
-        message.content.toLowerCase().startsWith('!cekilis ')
-    ) {
-        const yonetici = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
-        const sunucuSahibi = message.author.id === message.guild.ownerId;
-        const kurucuRol = AYARLAR.KURUCU_ROL_ID &&
-            message.member?.roles.cache.has(AYARLAR.KURUCU_ROL_ID);
-
-        if (!yonetici && !sunucuSahibi && !kurucuRol) {
-            return message.reply('❌ Çekilişi yalnızca yöneticiler veya kurucular başlatabilir.');
+    if (ad === 'çekiliş' || ad === 'cekilis') {
+        if (!komutYetkilisiMi(interaction)) {
+            return interaction.reply({ content: '❌ Çekilişi yalnızca yöneticiler veya kurucular başlatabilir.', ephemeral: true });
         }
-
-        const girdi = message.content.slice(message.content.indexOf(' ') + 1).trim();
-        const parcalar = girdi.split('|', 2).map(parca => parca.trim());
-        const sureMetni = parcalar[0];
-        const odul = parcalar[1];
-        const sureEslesmesi = sureMetni?.match(/^(\d+)\s*([mhd])$/i);
-
-        if (!sureEslesmesi || !odul) {
-            return message.reply(
-                '📝 Kullanım: `!çekiliş <süre> | <ödül>`\n' +
-                'Örnek: `!çekiliş 30m | 1x ULTRAVIP`\n' +
-                'Süre biçimleri: `m` dakika, `h` saat, `d` gün.'
-            );
+        const sureMetni = interaction.options.getString('sure', true).trim();
+        const odul = interaction.options.getString('odul', true).trim();
+        const eslesme = sureMetni.match(/^(\d+)\s*([mhd])$/i);
+        if (!eslesme || !odul) {
+            return interaction.reply({ content: '📝 Süreyi `30m`, `2h` veya `1d` biçiminde gir ve ödülü yaz.', ephemeral: true });
         }
-
-        const miktar = Number(sureEslesmesi[1]);
-        const birim = sureEslesmesi[2].toLowerCase();
-        const carpan = { m: 60_000, h: 3_600_000, d: 86_400_000 }[birim];
-        const sureMs = miktar * carpan;
-
+        const carpan = { m: 60_000, h: 3_600_000, d: 86_400_000 }[eslesme[2].toLowerCase()];
+        const sureMs = Number(eslesme[1]) * carpan;
         if (!Number.isSafeInteger(sureMs) || sureMs < 60_000 || sureMs > 7 * 86_400_000) {
-            return message.reply('⏱️ Çekiliş süresi 1 dakika ile 7 gün arasında olmalı.');
+            return interaction.reply({ content: '⏱️ Çekiliş süresi 1 dakika ile 7 gün arasında olmalı.', ephemeral: true });
         }
-
-        if (odul.length > 200) {
-            return message.reply('❌ Ödül açıklaması en fazla 200 karakter olabilir.');
-        }
-
-        const bitisZamani = Date.now() + sureMs;
-        const cekilisEmbed = new EmbedBuilder()
+        if (odul.length > 200) return interaction.reply({ content: '❌ Ödül en fazla 200 karakter olabilir.', ephemeral: true });
+        await interaction.deferReply({ ephemeral: true });
+        const bitis = Date.now() + sureMs;
+        const embed = new EmbedBuilder()
             .setColor(0xF1C40F)
-            .setAuthor({
-                name: 'KünefeSMP • Büyük Çekiliş',
-                iconURL: message.guild.iconURL({ dynamic: true }) || client.user.displayAvatarURL()
-            })
+            .setAuthor({ name: 'KünefeSMP • Büyük Çekiliş', iconURL: interaction.guild.iconURL({ dynamic: true }) || client.user.displayAvatarURL() })
             .setTitle('🎁 Şansını Dene, Ödülü Kazan!')
-            .setDescription(
-                `KünefeSMP ailesine güzel bir sürprizimiz var! 🍯\n\n` +
-                `**Ödül:** ${odul}\n\n` +
-                `Katılmak için aşağıdaki düğmeye bas. Kazanan çekiliş bitince rastgele seçilecek!`
-            )
+            .setDescription(`KünefeSMP ailesine güzel bir sürprizimiz var! 🍯\n\n**Ödül:** ${odul}\n\nKatılmak için aşağıdaki düğmeye bas. Kazanan çekiliş bitince rastgele seçilecek!`)
             .addFields(
-                {
-                    name: '⏳ Çekiliş bitişi',
-                    value: `<t:${Math.floor(bitisZamani / 1000)}:R>`,
-                    inline: true
-                },
+                { name: '⏳ Çekiliş bitişi', value: `<t:${Math.floor(bitis / 1000)}:R>`, inline: true },
                 { name: '🙋 Katılımcılar', value: '0 kişi', inline: true }
             )
             .setFooter({ text: 'Her oyuncu bir kez katılabilir • KünefeSMP' })
             .setTimestamp();
-
-        const cekilisButonu = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('cekilis_katil')
-                .setLabel('Çekilişe Katıl (0)')
-                .setEmoji('🎉')
-                .setStyle(ButtonStyle.Success)
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('cekilis_katil').setLabel('Çekilişe Katıl (0)').setEmoji('🎉').setStyle(ButtonStyle.Success)
         );
-
-        const duyuru = await message.channel.send({
-            embeds: [cekilisEmbed],
-            components: [cekilisButonu]
-        });
-
-        cekilisler.set(duyuru.id, {
+        const sent = await interaction.channel.send({ embeds: [embed], components: [row] });
+        cekilisler.set(sent.id, {
             katilimcilar: new Set(),
-            kanalId: message.channel.id,
-            bitisZamani,
-            zamanlayici: setTimeout(() => cekilisiBitir(duyuru.id), sureMs)
+            kanalId: interaction.channel.id,
+            bitisZamani: bitis,
+            zamanlayici: setTimeout(() => cekilisiBitir(sent.id), sureMs)
         });
-
-        await message.delete().catch(() => {});
+        await interaction.editReply({ content: `✅ Çekiliş oluşturuldu: ${sent}` });
         return;
     }
 
-    // --- !destek-kur KOMUTU ---
-    if (message.content === '!destek-kur') {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            return message.reply('❌ Bu komutu sadece yöneticiler kullanabilir!');
+    if (ad === 'destek-kur') {
+        if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: '❌ Bu komutu yalnızca yöneticiler kullanabilir.', ephemeral: true });
         }
-
+        await interaction.deferReply({ ephemeral: true });
         const embed = new EmbedBuilder()
             .setTitle('🍯 KünefeSMP Yardım & Destek Masası')
             .setDescription(
@@ -546,27 +475,24 @@ client.on('messageCreate', async (message) => {
                 '• Sorununu kısa ve anlaşılır bir dille ifade et.\n' +
                 '• Varsa oyun içi kanıt (fotoğraf veya video) hazırla.\n' +
                 '• Yetkilileri gereksiz yere etiketlememeye özen göster, sırayla bakılacaktır.\n\n' +
-                '⚡ **Hemen Başla:**\n' +
-                'Aşağıdaki butona tıklayarak sadece sana özel bir destek odası açabilirsin.'
+                '⚡ **Hemen Başla:**\nAşağıdaki butona tıklayarak sadece sana özel bir destek odası açabilirsin.'
             )
             .setColor(0xE67E22)
             .setFooter({ text: 'KünefeSMP • Kaliteli ve Güvenli Oyun Deneyimi' });
-
-        const buton = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('bilet_olustur')
-                .setLabel('Destek Talebi Oluştur')
-                .setEmoji('🎫')
-                .setStyle(ButtonStyle.Primary)
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('bilet_olustur').setLabel('Destek Talebi Oluştur').setEmoji('🎫').setStyle(ButtonStyle.Primary)
         );
-
-        await message.delete().catch(() => {});
-        await message.channel.send({ embeds: [embed], components: [buton] });
+        await interaction.channel.send({ embeds: [embed], components: [row] });
+        await interaction.editReply({ content: '✅ Destek paneli bu kanala kuruldu.' });
     }
-});
+}
 
-// ================= BUTON İŞLEMLERİ =================
 client.on('interactionCreate', async (interaction) => {
+    if (interaction.isChatInputCommand()) {
+        await slashKomutunuCalistir(interaction);
+        return;
+    }
+
     if (interaction.isButton() && interaction.customId === 'bilet_olustur') {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('bilet_kategori_secimi')
