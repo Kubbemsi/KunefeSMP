@@ -430,8 +430,8 @@ async function slashKomutunuCalistir(interaction) {
         }
         const carpan = { m: 60_000, h: 3_600_000, d: 86_400_000 }[eslesme[2].toLowerCase()];
         const sureMs = Number(eslesme[1]) * carpan;
-        if (!Number.isSafeInteger(sureMs) || sureMs < 60_000 || sureMs > 7 * 86_400_000) {
-            return interaction.reply({ content: '⏱️ Çekiliş süresi 1 dakika ile 7 gün arasında olmalı.', ephemeral: true });
+        if (!Number.isSafeInteger(sureMs) || sureMs < 60_000 || sureMs > 100 * 86_400_000) {
+            return interaction.reply({ content: '⏱️ Çekiliş süresi 1 dakika ile 100 gün arasında olmalı.', ephemeral: true });
         }
         if (odul.length > 200) return interaction.reply({ content: '❌ Ödül en fazla 200 karakter olabilir.', ephemeral: true });
         await interaction.deferReply({ ephemeral: true });
