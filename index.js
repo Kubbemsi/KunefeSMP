@@ -38,7 +38,9 @@ const AYARLAR = {
     KATEGORI_ID: "1547551650464530462",
     ONERI_KANAL_ID: "1550824276305776660",
     KARSILAMA_KANAL_ID: "1547561101745459320",
-    SUNUCU_IP: "oyna.kunefesmp.com.tr"
+    SUNUCU_IP: "oyna.kunefesmp.com.tr",
+    YOUTUBE_KANAL_ID: "UCAnAOiwGXdOk-axlTTEHloA", // UC ile başlayan YouTube kanal ID'si
+    YOUTUBE_DUYURU_KANAL_ID: "1547583746012610671" // Video duyuru kanalının Discord ID'si
 };
 
 const KUFUR_LISTESI = [
@@ -51,6 +53,67 @@ const REKLAM_REGEX = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li|com\/invite)|
 const oneriOylari = {};
 const etkinlikKatilimlari = {};
 const cekilisler = new Map();
+let youtubeSonVideoId = null;
+
+// ================= YOUTUBE YENİ VİDEO TAKİBİ =================
+function xmlMetniniCoz(metin) {
+    return metin
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+}
+
+async function youtubeSonVideoKontrolEt() {
+    const kanalId = AYARLAR.YOUTUBE_KANAL_ID;
+    const discordKanalId = AYARLAR.YOUTUBE_DUYURU_KANAL_ID;
+    if (!kanalId || kanalId.startsWith('BURAYA_') || !discordKanalId || discordKanalId.startsWith('BURAYA_')) return;
+
+    try {
+        const yanit = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(kanalId)}`);
+        if (!yanit.ok) throw new Error(`YouTube RSS yanıtı: ${yanit.status}`);
+        const xml = await yanit.text();
+        const entry = xml.match(/<entry>([\s\S]*?)<\/entry>/)?.[1];
+        if (!entry) return;
+
+        const videoId = entry.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1];
+        const baslikHam = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1];
+        if (!videoId || !baslikHam) return;
+
+        // İlk kontrolde eski videoyu duyurmaz; yalnızca bundan sonraki yüklemeleri paylaşır.
+        if (youtubeSonVideoId === null) {
+            youtubeSonVideoId = videoId;
+            console.log('[YouTube] Kanal takibi başladı; mevcut son video başlangıç noktası alındı.');
+            return;
+        }
+        if (videoId === youtubeSonVideoId) return;
+        youtubeSonVideoId = videoId;
+
+        const duyuruKanali = await client.channels.fetch(discordKanalId);
+        if (!duyuruKanali?.isTextBased()) {
+            console.error('[YouTube] Discord duyuru kanalı bulunamadı veya yazı kanalı değil.');
+            return;
+        }
+
+        const baslik = xmlMetniniCoz(baslikHam);
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const embed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setAuthor({ name: 'UnplugMC • Yeni Video', iconURL: client.user.displayAvatarURL() })
+            .setTitle(baslik.slice(0, 256))
+            .setURL(videoUrl)
+            .setDescription(`🎬 **UnplugMC yeni bir video paylaştı!**\n\n[Videoyu izlemek için tıkla](${videoUrl})`)
+            .setImage(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`)
+            .setFooter({ text: 'KünefeSMP • YouTube duyuruları' })
+            .setTimestamp();
+
+        await duyuruKanali.send({ embeds: [embed] });
+        console.log(`[YouTube] Yeni video duyuruldu: ${videoId}`);
+    } catch (err) {
+        console.error('YouTube videosu kontrol edilemedi:', err);
+    }
+}
 
 // ================= CANLI DURUM GÜNCELLEME =================
 async function sunucuDurumGuncelle() {
@@ -86,6 +149,9 @@ client.on('ready', () => {
     console.log(`[+] Bot başarıyla aktif edildi: ${client.user.tag}`);
     sunucuDurumGuncelle();
     setInterval(sunucuDurumGuncelle, 30000);
+
+    youtubeSonVideoKontrolEt();
+    setInterval(youtubeSonVideoKontrolEt, 120000);
 });
 
 // ================= KARŞILAMA SİSTEMİ =================
