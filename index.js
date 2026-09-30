@@ -145,8 +145,8 @@ async function sunucuDurumGuncelle() {
         const veri = await yanit.json();
         client.user.setPresence({
             activities: [{ name: 'custom', state: veri.online
-                ? `🟢 KünefeSMP | ${AYARLAR.SUNUCU_IP}`
-                : `🔴 Sunucu Bakımda | ${AYARLAR.SUNUCU_IP}`, type: ActivityType.Custom }],
+                ? `🟢 KünefeSMP Açık! | ${AYARLAR.SUNUCU_IP}`
+                : `🔴 Sunucu Kapalı/Bakımda | ${AYARLAR.SUNUCU_IP}`, type: ActivityType.Custom }],
             status: veri.online ? 'online' : 'dnd'
         });
     } catch (err) {
