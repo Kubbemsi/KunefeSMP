@@ -121,9 +121,9 @@ async function youtubeSonVideoKontrolEt() {
             const zatenVar = eskiMesajlar?.some(m => m.content.includes(url) || m.embeds.some(e => e.url === url));
             if (!zatenVar) {
                 const embed = new EmbedBuilder().setColor(0xFF0000)
-                    .setAuthor({ name: 'UnplugMC • Yeni Video', iconURL: client.user.displayAvatarURL() })
+                    .setAuthor({ name: 'Künefe Bey • Yeni Video', iconURL: client.user.displayAvatarURL() })
                     .setTitle(video.baslik.slice(0, 256)).setURL(url)
-                    .setDescription(`🎬 **UnplugMC yeni bir video paylaştı!**\n\n[Videoyu izlemek için tıkla](${url})`)
+                    .setDescription(`🎬 **Künefe Bey yeni bir video paylaştı!**\n\n[Videoyu izlemek için tıkla](${url})`)
                     .setImage(`https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`)
                     .setFooter({ text: 'KünefeSMP • YouTube duyuruları' }).setTimestamp(video.yayin || Date.now());
                 await kanal.send({ embeds: [embed] });
@@ -145,7 +145,7 @@ async function sunucuDurumGuncelle() {
         const veri = await yanit.json();
         client.user.setPresence({
             activities: [{ name: 'custom', state: veri.online
-                ? `🟢 KünefeSMP Açık! | ${AYARLAR.SUNUCU_IP}`
+                ? `🟢 KünefeSMP Açık! | ${AYARLAR.SUNUCU_IP} | 1.21-26.2`
                 : `🔴 Sunucu Kapalı/Bakımda | ${AYARLAR.SUNUCU_IP}`, type: ActivityType.Custom }],
             status: veri.online ? 'online' : 'dnd'
         });
